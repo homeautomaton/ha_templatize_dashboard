@@ -1,0 +1,179 @@
+#!/usr/local/bin/python3
+import argparse
+import textwrap
+import yaml
+cnts = {}
+known = {}
+used = {}
+not_found = {}
+leaf_nodes = {}
+ordered = []
+
+#### pip3 install PyYAML first.
+#### For instructions:
+####     ha_templatize_dashboard --help
+
+def typen( t ):
+    if t in cnts:
+        cnts[ t ] += 1
+    else:
+        cnts[ t ] = 1
+    return t + '_' + str( cnts[ t ] )
+
+def gridn( e ):
+    if 'cards' in e and 'title' in e['cards'][0]:
+        return 'grid(' + e['cards'][0]['title'] + ')'
+    elif 'cards' in e and 'entity' in e['cards'][0]:
+        return 'grid(' + e['cards'][0]['entity'] + ')'
+    return( typen( 'grid' ) )
+
+def record( keys, elem ):
+    global known
+    global ordered
+    k = '.'.join( keys )
+    if k not in known:
+        parent = '.'.join( keys[ :-1 ] )
+        if parent in leaf_nodes:
+            del( leaf_nodes[ parent ] )
+        known[ k ] = elem
+        ordered += [ k ]
+        leaf_nodes[ k ] = True
+
+def process( operation, args, elem, keys = [] ):
+    global used
+    global not_found
+    path = '.'.join( keys )
+    if operation == 'carve' and path in leaf_nodes:
+        return( '#include ' + path )
+
+    if type( elem ) == type( {} ):
+        result = {}
+        etype = elem.get('type')
+        etitle = elem.get('title')
+
+        if operation == 'wrap' and etype in ('cards','entities'):
+            result = { 'type' : args.wrap, 'title' : etitle, 'cards' : [ elem ] }
+            return result
+        if operation == 'record': record( keys, elem )
+        n = ''
+        if 'title' in elem:
+            n = '(' + etitle + ')'
+        elif etype == 'grid':
+            n = '(' + gridn( elem ) + ')'
+        elif etype == 'entities':
+            n = ''
+        elif 'type' in elem:
+            n = '(' + typen( elem[ 'type' ] ) + ')'
+
+        for k in elem:
+            result[ k ] = process( operation, args, elem[k], keys + [ k + n ] )
+
+    elif type( elem ) == type( [] ):
+        result = []
+        if operation == 'record': record( keys, elem )
+        for e in elem:
+            result += [ process( operation, args, e, keys ) ]
+
+    elif args.list_entities:
+        result = elem
+        print( path + ': ' + repr( elem ) )
+
+    elif operation == 'include' and type( elem ) == type( '#' ) and elem.startswith('#include '):
+        k = elem[9:]
+        if k in known:
+            used[ k ] = True
+            result = known[ k ]
+        else:
+            not_found[ k ] = True
+            result = elem
+    else:
+        result = elem
+
+    return result
+
+def main( ):
+    p = argparse.ArgumentParser(
+      description='yaml templating tool for Home Assistant',
+      formatter_class=argparse.RawDescriptionHelpFormatter,
+      epilog=textwrap.dedent( '''\
+        Typical usage:
+            (1) Choose an existing dashboard in home assistant which you already have edited, or create 
+            a new one with all of your entities (the default).  (You can choose your "Overview" dashboard,
+            but realize in step 2 you will be editing it.)
+
+            (2) Edit your chosen dashboard to get the complete yaml text of the generated Overview dashboard, 
+            and use copy/paste to store it in a file, like overview.yaml.
+
+            (3) Then, create a template file, using
+            $ ha_templatize_dashboard -f overview.yaml -s >template.yaml
+
+            (4) Edit template.yaml to arrange rooms and add any additional formatting.
+
+            (5) Generate a new dashboard, combining original overview.yaml and template.yaml:
+            $ ha_templatize_dashboard -f overview.yaml -t template.yaml >new-overview.yaml
+
+            Notes:
+            You may not want to re-run step 3 on subsequent generations, after you have made modifications to your
+            template. This will keep your previous edits and allow you to discover new entities added to exising rooms. 
+            New rooms won't automatically appear in your template but they are easy to add.
+
+            Also, if you do no editing in step 2, then you will just get the default ordering of rooms and
+            still be able to use the process (skipping step 3) to discover new entities.
+
+            To find any new rooms, or debug issues with missing "#include"s, use -v during step 5 to generate
+            comments at the end of the .yaml output.
+         ''' ) )
+
+    p.add_argument( '-f', '--file', help='input "Overview" yaml' )
+    op_g = p.add_argument_group('operation selectors')
+    op_g_mut = op_g.add_mutually_exclusive_group()
+    op_g_mut.add_argument( '-s', '--output-template', action='store_true', help='Generate a template file matching the existing overview.yaml input' )
+    op_g_mut.add_argument( '-t', '--template-file', help='template file to be expanded' )
+    op_g_mut.add_argument( '-e', '--list-entities', action='store_true', help='show entities' )
+    op_g_mut.add_argument( '-H', '--list-hierarchy', action='store_true', help='show hierarchy' )
+    op_g_mut.add_argument( '-D', '--list-deep', action='store_true', help='show deep hierarchy' )
+    op_g_mut.add_argument( '-l', '--list-leaf-nodes', action='store_true', help='show bottom of hierarchy' )
+    p.add_argument( '-v', '--verbose', action='store_true', help='give verbose output' )
+    p.add_argument( '-w', '--wrap', metavar='custom:collapsable-cards', help='wrap each card with, for example, custom:collapsable-cards' )
+
+    args = p.parse_args( )
+
+    if not args.file:
+        p.error( "--file is required" )
+        return
+ 
+    with open( args.file, 'r' ) as file:
+        doc = yaml.safe_load( file )
+    if args.wrap: doc = process( 'wrap', args, doc )
+    process( 'record', args, doc )
+    if args.list_hierarchy:
+        for k in ordered:
+            print( k )
+    elif args.list_deep:
+        for k in ordered:
+            print( k )
+            print( yaml.dump( known[ k ] ) )
+    elif args.list_leaf_nodes:
+        for k in ordered:
+            if k in leaf_nodes:
+                print( k )
+                print( yaml.dump( known[ k ] ) )
+    elif args.output_template:
+        newdoc = process( 'carve', args, doc )
+        print( yaml.dump( newdoc ) )
+    elif args.template_file:
+        with open( args.template_file, 'r' ) as file:
+            template = yaml.safe_load( file )
+        newdoc = process( 'include', args, template )
+        print( yaml.dump( newdoc ) )
+        if args.verbose:
+            for i in leaf_nodes:
+                if i not in used:
+                    print('# not used: ' + i )
+            for i in not_found:
+                print('# not found: ' + i )
+    else:
+        print( yaml.dump( doc ) )
+
+if __name__ == '__main__':
+    main( )
