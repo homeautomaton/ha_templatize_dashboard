@@ -2,6 +2,7 @@
 import argparse
 import textwrap
 import yaml
+import json
 cnts = {}
 known = {}
 used = {}
@@ -133,6 +134,7 @@ def main( ):
     op_g_mut.add_argument( '-H', '--list-hierarchy', action='store_true', help='show hierarchy' )
     op_g_mut.add_argument( '-D', '--list-deep', action='store_true', help='show deep hierarchy' )
     op_g_mut.add_argument( '-l', '--list-leaf-nodes', action='store_true', help='show bottom of hierarchy' )
+    op_g_mut.add_argument( '-J', '--json', action='store_true', help='show hierarcy as JSON' )
     p.add_argument( '-v', '--verbose', action='store_true', help='give verbose output' )
     p.add_argument( '-w', '--wrap', metavar='custom:collapsable-cards', help='wrap each card with, for example, custom:collapsable-cards' )
 
@@ -149,6 +151,8 @@ def main( ):
     if args.list_hierarchy:
         for k in ordered:
             print( k )
+    elif args.json:
+        print( json.dumps( doc, indent=2 ) )
     elif args.list_deep:
         for k in ordered:
             print( k )
@@ -172,6 +176,8 @@ def main( ):
                     print('# not used: ' + i )
             for i in not_found:
                 print('# not found: ' + i )
+    elif args.list_entities:
+        pass
     else:
         print( yaml.dump( doc ) )
 
