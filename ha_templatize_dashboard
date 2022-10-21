@@ -3,94 +3,95 @@ import argparse
 import textwrap
 import yaml
 import json
-cnts = {}
+
 known = {}
 used = {}
+included = {}
 not_found = {}
-leaf_nodes = {}
-ordered = []
+group = 'unknown'
+level = 0
 
 #### pip3 install PyYAML first.
 #### For instructions:
 ####     ha_templatize_dashboard --help
 
-def typen( t ):
-    if t in cnts:
-        cnts[ t ] += 1
-    else:
-        cnts[ t ] = 1
-    return t + '_' + str( cnts[ t ] )
-
-def gridn( e ):
-    if 'cards' in e and 'title' in e['cards'][0]:
-        return 'grid(' + e['cards'][0]['title'] + ')'
-    elif 'cards' in e and 'entity' in e['cards'][0]:
-        return 'grid(' + e['cards'][0]['entity'] + ')'
-    return( typen( 'grid' ) )
-
-def record( keys, elem ):
-    global known
-    global ordered
-    k = '.'.join( keys )
-    if k not in known:
-        parent = '.'.join( keys[ :-1 ] )
-        if parent in leaf_nodes:
-            del( leaf_nodes[ parent ] )
-        known[ k ] = elem
-        ordered += [ k ]
-        leaf_nodes[ k ] = True
-
-def process( operation, args, elem, keys = [] ):
+def process( operation, args, elem ):
     global used
     global not_found
-    path = '.'.join( keys )
-    if operation == 'carve' and path in leaf_nodes:
-        return( '#include ' + path )
+    global known
+    global group
+    global level
+
+    if level < 5: group = 'unknown'
 
     if type( elem ) == type( {} ):
         result = {}
         etype = elem.get('type')
         etitle = elem.get('title')
 
-        if operation == 'wrap' and etype in ('cards','entities'):
-            result = { 'type' : args.wrap, 'title' : etitle, 'cards' : [ elem ] }
-            return result
-        if operation == 'record': record( keys, elem )
-        n = ''
         if 'title' in elem:
-            n = '(' + etitle + ')'
-        elif etype == 'grid':
-            n = '(' + gridn( elem ) + ')'
-        elif etype == 'entities':
-            n = ''
-        elif 'type' in elem:
-            n = '(' + typen( elem[ 'type' ] ) + ')'
+            group = etitle
+
+        if operation == 'record' and etype == 'entities':
+            if group not in known: known[ group ] = [ ]
+            known[ group ] += [ elem ]
+            return {}
+
+        if operation == 'carve':
+            if group in known:
+                if etype in ( 'entities' ):
+                    if group not in included:
+                        included[ group ] = 1
+                        return( { 'include' : group } )
+                    else:
+                        return( None )
+                if type( elem ) == type( {} ) and 'entity' in elem and group != 'unknown':
+                    return( None )
 
         for k in elem:
-            result[ k ] = process( operation, args, elem[k], keys + [ k + n ] )
+            if operation == 'record' and k == 'entity':
+                if group not in known: known[ group ] = [ ]
+                known[ group ] += [ elem ]
+                next
+            if operation == 'include' and k == 'include':
+                tag = elem[ k ]
+                if tag in known:
+                    used[ tag ] = True
+                    result = known[ tag ]
+                    break
+                else:
+                    not_found[ tag ] = True
+                    result[ 'include' ] = tag
+            else:
+                level += 1
+                node = process( operation, args, elem[k] )
+                level -= 1
+                if type( node ) == type( {} ) and 'include' in node:
+                    result[ 'include' ] = node[ 'include' ]
+                else:
+                    result[ k ] = node
 
     elif type( elem ) == type( [] ):
         result = []
-        if operation == 'record': record( keys, elem )
         for e in elem:
-            result += [ process( operation, args, e, keys ) ]
-
-    elif args.list_entities:
-        result = elem
-        print( path + ': ' + repr( elem ) )
-
-    elif operation == 'include' and type( elem ) == type( '#' ) and elem.startswith('#include '):
-        k = elem[9:]
-        if k in known:
-            used[ k ] = True
-            result = known[ k ]
-        else:
-            not_found[ k ] = True
-            result = elem
+            level += 1
+            node = process( operation, args, e )
+            level -= 1
+            if node:
+                if type( node ) == type( [] ):
+                    result += node
+                else:
+                    result += [ node ]
     else:
         result = elem
 
     return result
+
+def output( args, doc ):
+    if args.json:
+        print( json.dumps( doc, indent=2 ) )
+    else:
+        print( yaml.dump( doc ) )
 
 def main( ):
     p = argparse.ArgumentParser(
@@ -121,7 +122,7 @@ def main( ):
             Also, if you do no editing in step 2, then you will just get the default ordering of rooms and
             still be able to use the process (skipping step 3) to discover new entities.
 
-            To find any new rooms, or debug issues with missing "#include"s, use -v during step 5 to generate
+            To find any new rooms, or debug issues with missing "include"s, use -v during step 5 to generate
             comments at the end of the .yaml output.
          ''' ) )
 
@@ -130,13 +131,8 @@ def main( ):
     op_g_mut = op_g.add_mutually_exclusive_group()
     op_g_mut.add_argument( '-s', '--output-template', action='store_true', help='Generate a template file matching the existing overview.yaml input' )
     op_g_mut.add_argument( '-t', '--template-file', help='template file to be expanded' )
-    op_g_mut.add_argument( '-e', '--list-entities', action='store_true', help='show entities' )
-    op_g_mut.add_argument( '-H', '--list-hierarchy', action='store_true', help='show hierarchy' )
-    op_g_mut.add_argument( '-D', '--list-deep', action='store_true', help='show deep hierarchy' )
-    op_g_mut.add_argument( '-l', '--list-leaf-nodes', action='store_true', help='show bottom of hierarchy' )
-    op_g_mut.add_argument( '-J', '--json', action='store_true', help='show hierarcy as JSON' )
+    p.add_argument( '-J', '--json', action='store_true', help='show hierarcy as JSON' )
     p.add_argument( '-v', '--verbose', action='store_true', help='give verbose output' )
-    p.add_argument( '-w', '--wrap', metavar='custom:collapsable-cards', help='wrap each card with, for example, custom:collapsable-cards' )
 
     args = p.parse_args( )
 
@@ -146,40 +142,23 @@ def main( ):
  
     with open( args.file, 'r' ) as file:
         doc = yaml.safe_load( file )
-    if args.wrap: doc = process( 'wrap', args, doc )
     process( 'record', args, doc )
-    if args.list_hierarchy:
-        for k in ordered:
-            print( k )
-    elif args.json:
-        print( json.dumps( doc, indent=2 ) )
-    elif args.list_deep:
-        for k in ordered:
-            print( k )
-            print( yaml.dump( known[ k ] ) )
-    elif args.list_leaf_nodes:
-        for k in ordered:
-            if k in leaf_nodes:
-                print( k )
-                print( yaml.dump( known[ k ] ) )
-    elif args.output_template:
+    if args.output_template:
         newdoc = process( 'carve', args, doc )
-        print( yaml.dump( newdoc ) )
+        output( args, newdoc )
     elif args.template_file:
         with open( args.template_file, 'r' ) as file:
             template = yaml.safe_load( file )
         newdoc = process( 'include', args, template )
-        print( yaml.dump( newdoc ) )
+        output( args, newdoc ) 
         if args.verbose:
-            for i in leaf_nodes:
+            for i in known:
                 if i not in used:
                     print('# not used: ' + i )
             for i in not_found:
                 print('# not found: ' + i )
-    elif args.list_entities:
-        pass
     else:
-        print( yaml.dump( doc ) )
+        output( args, doc )
 
 if __name__ == '__main__':
     main( )
