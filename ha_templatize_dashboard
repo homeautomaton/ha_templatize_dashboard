@@ -147,20 +147,20 @@ def main( ):
             (3) Then, create a template file, using
             $ ha_templatize_dashboard -f overview.yaml -s >template.yaml
 
-            (4) Edit template.yaml to arrange rooms and add any additional formatting.
+            (4) Edit template.yaml to arrange areas and add any additional formatting.
 
             (5) Generate a new dashboard, combining original overview.yaml and template.yaml:
             $ ha_templatize_dashboard -f overview.yaml -t template.yaml >new-overview.yaml
 
             Notes:
             You may not want to re-run step 3 on subsequent generations, after you have made modifications to your
-            template. This will keep your previous edits and allow you to discover new entities added to exising rooms. 
-            New rooms won't automatically appear in your template but they are easy to add.
+            template. This will keep your previous edits and allow you to discover new entities added to exising areas. 
+            New areas won't automatically appear in your template but they are easy to add.
 
-            Also, if you do no editing in step 2, then you will just get the default ordering of rooms and
+            Also, if you do no editing in step 2, then you will just get the default ordering of areas and
             still be able to use the process (skipping step 3) to discover new entities.
 
-            To find any new rooms, or debug issues with missing "include"s, use -v during step 5 to generate
+            To find any new areas, or debug issues with missing "include"s, use -v during step 5 to generate
             comments at the end of the .yaml output.
          ''' ) )
 
