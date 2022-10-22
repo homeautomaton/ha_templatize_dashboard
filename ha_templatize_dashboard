@@ -29,8 +29,7 @@ def check_include_froms( elem ):
             if check_include_froms( e ):
                 return True
     return False
-    
-    
+
 def process( operation, args, elem, reprocessing ):
     global used
     global not_found
@@ -50,6 +49,8 @@ def process( operation, args, elem, reprocessing ):
             group = etitle
 
         if operation == 'record' and args.template_file:
+           if etype == 'entities' and args.hide_header_toggle:
+               elem[ 'show_header_toggle' ] = False
            elem[ 'included-from' ] = group
 
         if operation == 'record' and etype == 'entities':
@@ -62,7 +63,7 @@ def process( operation, args, elem, reprocessing ):
                 if 'included-from' in elem:
                     if elem[ 'included-from' ] != prior_include:
                         prior_include = elem[ 'included-from' ]
-                        return( { 'include' : elem[ 'included-from' ] } )
+                        return ( { 'include' : elem[ 'included-from' ] } )
                     else:
                         return( None )
             else:
@@ -70,7 +71,7 @@ def process( operation, args, elem, reprocessing ):
                     if etype in ( 'entities' ):
                         if group not in included:
                             included[ group ] = 1
-                            return( { 'include' : group } )
+                            return ( { 'include' : group } )
                         else:
                             return( None )
                     if type( elem ) == type( {} ) and 'entity' in elem and group != 'unknown':
@@ -85,7 +86,16 @@ def process( operation, args, elem, reprocessing ):
                 tag = elem[ k ]
                 if tag in known:
                     used[ tag ] = True
-                    result = known[ tag ]
+                    if args.wrap:
+                        result = { 'cards' : known[ tag ], 'type' : args.wrap }
+                        if 'title' in result[ 'cards' ][ 0 ]:
+                            result[ 'title' ] = result[ 'cards' ][ 0 ][ 'title' ]
+                            if args.strip_title: del( result[ 'cards' ][ 0 ][ 'title' ] )
+                        elif 'entities' in result[ 'cards'] and 'title' in result[ 'cards' ][ 0 ][ 'entities' ]:
+                            result[ 'title' ] = result[ 'cards' ][ 0 ][ 'entities' ][ 'title' ]
+                            if args.strip_title: del( [ 'cards' ][ 0 ][ 'entities' ][ 'title' ] )
+                    else:
+                        result = known[ tag ]
                     break
                 else:
                     not_found[ tag ] = True
@@ -161,6 +171,9 @@ def main( ):
     op_g_mut.add_argument( '-t', '--template-file', help='template file to be expanded' )
     p.add_argument( '-J', '--json', action='store_true', help='show hierarcy as JSON' )
     p.add_argument( '-v', '--verbose', action='store_true', help='give verbose output' )
+    p.add_argument( '-w', '--wrap', metavar='custom:collapsable-cards', help='when applying template (-t) wrap each include with, for example, custom:collapsable-cards' )
+    p.add_argument( '-T', '--strip-title', action='store_true', help='along with --wrap, will strip the title from the included card, leaving only the wrapper card with a title' )
+    p.add_argument( '-H', '--hide-header-toggle', action='store_true', help='when applying template (-t) set show_header_toggle=false on entitites' )
 
     args = p.parse_args( )
 
