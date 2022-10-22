@@ -15,7 +15,7 @@ It works really well with custom:collapsable-cards, if you don't want all entiti
 From the --help output:
 
     usage: ha_templatize_dashboard [-h] [-f FILE] [-s | -t TEMPLATE_FILE] [-J]
-                                   [-v]
+                                   [-v] [-w custom:collapsable-cards] [-T] [-H]
     
     yaml templating tool for Home Assistant
     
@@ -24,10 +24,19 @@ From the --help output:
       -f FILE, --file FILE  input "Overview" yaml
       -J, --json            show hierarcy as JSON
       -v, --verbose         give verbose output
+      -w custom:collapsable-cards, --wrap custom:collapsable-cards
+                            when applying template (-t) wrap each include with,
+                            for example, custom:collapsable-cards
+      -T, --strip-title     along with --wrap, will strip the title from the
+                            included card, leaving only the wrapper card with a
+                            title
+      -H, --hide-header-toggle
+                            when applying template (-t) set
+                            show_header_toggle=false on entitites
     
     operation selectors:
       -s, --output-template
-                            Generate a template file matching the existing
+                            generate a template file matching the existing
                             overview.yaml input
       -t TEMPLATE_FILE, --template-file TEMPLATE_FILE
                             template file to be expanded
@@ -43,18 +52,18 @@ From the --help output:
         (3) Then, create a template file, using
         $ ha_templatize_dashboard -f overview.yaml -s >template.yaml
     
-        (4) Edit template.yaml to arrange rooms and add any additional formatting.
+        (4) Edit template.yaml to arrange areas and add any additional formatting.
     
         (5) Generate a new dashboard, combining original overview.yaml and template.yaml:
         $ ha_templatize_dashboard -f overview.yaml -t template.yaml >new-overview.yaml
     
         Notes:
         You may not want to re-run step 3 on subsequent generations, after you have made modifications to your
-        template. This will keep your previous edits and allow you to discover new entities added to exising rooms. 
-        New rooms won't automatically appear in your template but they are easy to add.
+        template. This will keep your previous edits and allow you to discover new entities added to exising areas. 
+        New areas won't automatically appear in your template but they are easy to add.
     
-        Also, if you do no editing in step 2, then you will just get the default ordering of rooms and
+        Also, if you do no editing in step 2, then you will just get the default ordering of areas and
         still be able to use the process (skipping step 3) to discover new entities.
     
-        To find any new rooms, or debug issues with missing "include"s, use -v during step 5 to generate
+        To find any new areas, or debug issues with missing "include"s, use -v during step 5 to generate
         comments at the end of the .yaml output.
